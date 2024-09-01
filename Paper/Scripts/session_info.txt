@@ -1,0 +1,53 @@
+R version 4.3.2 (2023-10-31 ucrt)
+Platform: x86_64-w64-mingw32/x64 (64-bit)
+Running under: Windows 11 x64 (build 22000)
+
+Matrix products: default
+
+
+locale:
+[1] LC_COLLATE=English_United States.utf8  LC_CTYPE=English_United States.utf8    LC_MONETARY=English_United States.utf8
+[4] LC_NUMERIC=C                           LC_TIME=English_United States.utf8    
+
+time zone: Asia/Karachi
+tzcode source: internal
+
+attached base packages:
+[1] parallel  stats     graphics  grDevices utils     datasets  methods   base     
+
+other attached packages:
+ [1] conflicted_1.2.0   lintr_3.1.1        styler_1.10.2      janitor_2.2.0      arrow_14.0.0.2     doParallel_1.0.17 
+ [7] iterators_1.0.14   foreach_1.5.2      thief_0.3          forecast_8.21.1    modeltime_1.2.8    stacks_1.0.3      
+[13] bonsai_0.2.1       lightgbm_4.2.0     xgboost_1.7.6.1    kernlab_0.9-32     ranger_0.16.0      glmnet_4.1-8      
+[19] Matrix_1.6-1.1     vip_0.4.1          usemodels_0.2.0    yardstick_1.2.0    workflowsets_1.0.1 workflows_1.1.3   
+[25] tune_1.1.2         rsample_1.2.0      recipes_1.0.9      parsnip_1.1.1      modeldata_1.2.0    infer_1.0.5       
+[31] dials_1.2.0        scales_1.3.0       broom_1.0.5        tidymodels_1.1.1   vars_1.6-0         tseries_0.10-55   
+[37] nowcasting_1.1.2   fable_0.3.3        feasts_0.3.1       fabletools_0.3.4   tsibbledata_0.4.1  tsibble_1.1.3     
+[43] fpp3_0.5           midasr_0.8         quantreg_5.97      SparseM_1.81       optimx_2023-10.21  sandwich_3.1-0    
+[49] openxlsx_4.2.5.2   readxl_1.4.3       zoo_1.8-12         glue_1.6.2         httr2_1.0.0        lubridate_1.9.3   
+[55] forcats_1.0.0      stringr_1.5.1      dplyr_1.1.4        purrr_1.0.2        readr_2.1.4        tidyr_1.3.0       
+[61] tibble_3.2.1       ggplot2_3.4.4      tidyverse_2.0.0   
+
+loaded via a namespace (and not attached):
+  [1] splines_4.3.2        bitops_1.0-7         R.oo_1.25.0          cellranger_1.1.0     hardhat_1.3.0       
+  [6] matlab_1.0.4         rex_1.2.1            xts_0.13.1           rpart_4.1.21         lifecycle_1.0.4     
+ [11] StanHeaders_2.26.28  processx_3.8.3       globals_0.16.2       lattice_0.21-9       MASS_7.3-60         
+ [16] backports_1.4.1      magrittr_2.0.3       remotes_2.4.2.1      fracdiff_1.5-2       zip_2.3.0           
+ [21] DBI_1.2.0            abind_1.4-5          R.cache_0.16.0       quadprog_1.5-8       R.utils_2.12.3      
+ [26] RCurl_1.98-1.13      nnet_7.3-19          pracma_2.4.4         rappdirs_0.3.3       ipred_0.9-14        
+ [31] lava_1.7.3           listenv_0.9.0        anytime_0.3.9        MatrixModels_0.5-3   texreg_1.39.3       
+ [36] parallelly_1.36.0    codetools_0.2-19     xml2_1.3.6           tidyselect_1.2.0     shape_1.4.6         
+ [41] farver_2.1.1         urca_1.3-3           butcher_0.3.3        jsonlite_1.8.8       ellipsis_0.3.2      
+ [46] Formula_1.2-5        survival_3.5-7       tools_4.3.2          Rcpp_1.0.11          prodlim_2023.08.28  
+ [51] TTR_0.24.4           distributional_0.3.2 withr_2.5.2          numDeriv_2016.8-1.1  fastmap_1.1.1       
+ [56] fansi_1.0.6          callr_3.7.3          digest_0.6.33        timechange_0.2.0     R6_2.5.1            
+ [61] colorspace_2.1-0     RMySQL_0.10.27       R.methodsS3_1.8.2    utf8_1.2.4           generics_0.1.3      
+ [66] data.table_1.14.10   corpcor_1.6.10       class_7.3-22         httr_1.4.7           pkgconfig_2.0.3     
+ [71] strucchange_1.5-3    gtable_0.3.4         timeDate_4032.109    GPfit_1.0-8          lmtest_0.9-40       
+ [76] furrr_0.3.1          cyclocomp_1.1.1      snakecase_0.11.1     gower_1.0.1          rstudioapi_0.15.0   
+ [81] tzdb_0.4.0           nlme_3.1-163         magic_1.6-1          curl_5.2.0           nloptr_2.0.3        
+ [86] cachem_1.0.8         desc_1.4.3           pillar_1.9.0         grid_4.3.2           vctrs_0.6.5         
+ [91] lhs_1.1.6            cli_3.6.2            compiler_4.3.2       rlang_1.1.2          crayon_1.5.2        
+ [96] future.apply_1.11.1  ps_1.7.5             stringi_1.8.3        assertthat_0.2.1     munsell_0.5.0       
+[101] lazyeval_0.2.2       hms_1.1.3            bit64_4.0.5          future_1.33.1        memoise_2.0.1       
+[106] RcppParallel_5.1.7   quantmod_0.4.25      bit_4.0.5            DiceDesign_1.10     

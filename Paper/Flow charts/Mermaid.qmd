@@ -1,0 +1,68 @@
+---
+title: "Mermaid charts"
+format:
+  gfm:
+    mermaid-format: png
+    mermaid:
+      theme: base
+editor: visual
+---
+
+```{mermaid}
+%%| fig-width: 6
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#0b3066', 'primaryTextColor': '#0d0d0d', 'primaryBorderColor': '#fff', 'lineColor': '#7a7b7d', 'secondaryColor': '#0d0d0d', 'tertiaryColor': '#fff'}}}%%
+
+flowchart LR
+%%{init:{'flowchart':{'nodeSpacing': 30, 'rankSpacing': 10}}}%%
+  A["GDP at market price"] --- B("Taxes less subsidies") & H("Construction and
+  real estate") & C("Fisheries") & D("Wholesale and 
+  retail trade") & I("Public administration, 
+  health and education") & E("Tourism") & F("Transportation and
+  communication") & G("Financial services") & J("Miscellaneous")
+  
+  H("Construction and
+  real estate") --- K("Construction") & L("Real estate")
+  
+  I("Public administration, 
+  health and education") --- M("Public administration") & N("Human health and social 
+  work activities") & O("Education")
+  
+  J("Miscellaneous") --- P("Agriculture") & Q("Manufacturing") & R("Electricity and 
+  water") & S("Entertainment, recreation 
+  and other services")
+  
+  style A fill:#92b0d1
+  
+  style B fill:#7fb88b
+  style C fill:#7fb88b
+  style D fill:#7fb88b
+  style E fill:#7fb88b
+  style F fill:#7fb88b
+  style G fill:#7fb88b
+  style H fill:#7fb88b
+  style I fill:#7fb88b
+  style J fill:#7fb88b
+  
+  style K fill:#dea4ac
+  style L fill:#dea4ac
+  style M fill:#dea4ac
+  style N fill:#dea4ac
+  style O fill:#dea4ac
+  style P fill:#dea4ac
+  style Q fill:#dea4ac
+  style R fill:#dea4ac
+  style S fill:#dea4ac
+```
+
+```{mermaid}
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#92b0d1', 'primaryTextColor': '#0d0d0d', 'primaryBorderColor': '#fff', 'lineColor': '#7a7b7d', 'secondaryColor': '#0d0d0d', 'tertiaryColor': '#fff'}}}%%
+
+flowchart TD
+%%{init:{'flowchart':{'nodeSpacing': 30, 'rankSpacing': 30}}}%%
+  A("Data") --> B("Pad the jagged edges with forecasts") --> C("Impute missing data using KNN") --> D("Generate H steps ahead nowcasts 
+  from each model") --> E("Generate ensemble models
+  (model stacking)") --> F("Identify the best-performing 
+  model for each sector") --> G("Reconcile headline forecasts with the 
+  sectoral level forecasts for each model 
+  and the best-performing models")
+```

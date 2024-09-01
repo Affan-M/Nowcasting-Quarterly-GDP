@@ -1,0 +1,1516 @@
+---
+title: "Nowcasting Headline and Sectoral Quarterly GDP"
+author:
+  - name: "Mohamed Affan"
+  - name: "Shaneez Latheef"
+format: pdf
+papersize: a4
+geometry: 
+  - top=25mm
+  - left=20mm
+  - right=20mm
+  - bottom=25mm
+toc: false
+toc-depth: 4
+number-sections: true
+colorlinks: false
+fig-pos: H
+tbl-pos: H
+cap-location: top
+mainfont: Roboto
+sansfont: Roboto
+monofont: Fira Code
+fontsize: 10pt
+execute:
+  echo: false
+  warning: false
+  cache: false
+editor: visual
+csl: apa.csl
+bibliography: references.bib
+link-citations: true
+include-in-header: 
+  - text: |
+      \usepackage{lscape}
+      \usepackage{xcolor}
+      \usepackage{caption}
+      \usepackage[all]{nowidow}
+      \usepackage{tocloft}
+      \usepackage{fontspec}
+      \usepackage{setspace}
+      \definecolor{col}{HTML}{595959}
+      \color{col}
+      \pagestyle{empty}
+      \onehalfspacing
+      \captionsetup[table]{labelfont=bf, font=bf}
+      \captionsetup[figure]{labelfont=bf, font=bf}
+      \newfontfamily\hfont{Roboto}
+      \addtokomafont{title}{\hfont\fontsize{40}{30}\selectfont\bfseries}
+      \addtokomafont{section}{\hfont\fontsize{20}{30}\selectfont\bfseries}
+      \addtokomafont{subsection}{\hfont\fontsize{14}{18}\selectfont\bfseries}
+      \addtokomafont{subsubsection}{\hfont\fontsize{12}{14}\selectfont\bfseries}
+      \newcommand{\subsubsubsection}[1]{\paragraph{#1}\mbox{}\\}
+      \setkomafont{paragraph}{\hfont\fontsize{12}{14}\selectfont\bfseries}
+      \renewcommand{\cfttoctitlefont}{\hfont\fontsize{20}{30}\selectfont\bfseries}
+      \renewcommand{\cftsecfont}{\normalfont}
+      \renewcommand{\cftsecpagefont}{\normalfont}
+      \renewcommand{\cftdot}{}
+nocite: |
+  @rcoreteam2023, @kuhn2020, @marcolinodemattos2019, @friedman2010, @wright2017, @karatzoglou2004, @chen2023, @couch2023, @dancho2023, @hyndman2018
+classoption: abstract
+abstract: |
+  Economic data becomes available with significant lags which in turn leads to uncertainty regarding the present state of the economy. In this paper, we set up a framework that can generate nowcasts for headline and sectoral level GDP, and conduct experiments to assess the accuracy of nowcasts. Using a large dataset of 449 economic indicators, we generate nowcasts from a host of univariate and multivariate models, which include traditional econometric nowcasting models and machine learning algorithms. We produce combinations of the best-performing models for each production sector. Furthermore, we explore hierarchical reconciliation methods to ensure that all individual nowcasts would adhere to aggregation constraints and empirically test the nowcast performance of the models and model combinations.
+---
+
+```{r initial_set_up}
+#| include: false
+
+# Loading required data files:
+load("Scripts/Data.rdata")
+
+# Running Functions.R to load the packages
+source("Scripts/0 Functions.R")
+
+# Loading required packages:
+library(flextable)
+library(ggthemes)
+library(scales)
+library(showtext)
+library(ggrepel)
+
+# Setting up fonts for charts
+font_add_google("Roboto")
+showtext_auto()
+
+# Set flextable default
+text_color = "#262626"
+
+set_flextable_defaults(
+  font.family = "Roboto",
+  font.color = text_color, 
+  font.size = 10
+)
+```
+
+```{=latex}
+\pagenumbering{gobble}
+```
+{{< pagebreak >}}
+
+```{=latex}
+\setcounter{tocdepth}{4}
+\tableofcontents
+```
+{{< pagebreak >}}
+
+```{=latex}
+\pagenumbering{arabic}
+```
+# Introduction
+
+Nowcasting refers to the processes used to forecast present or immediate conditions. As it relates to macroeconomics, the need for nowcasting arises primarily because economic data becomes available with significant lags. This is particularly true of GDP data, which is published quarterly and/or annually in most countries. Consequently, policymakers are faced with a significant amount of uncertainty surrounding the immediate present state of the economy.
+
+Even in advanced economies, official GDP data is published with a lag. For instance, in both the USA and the UK, the first release of official quarterly GDP data is published around 1 month after the end of the reference quarter for the data, and in the Euro area the publication lag is around 3 weeks longer [@banbura2013]. The issue of publication lags is even more pronounced in developing and underdeveloped economies. For example, in the Maldives, the Quarterly National Accounts are scheduled for release around 3 months after the end of the reference quarter [@maldivesbureauofstatistics2020].
+
+Even though Quarterly GDP data becomes available with significant lags, a lot of economic data series that contain useful information about overall economic activity and productivity are available at higher frequencies. For example, data pertaining to tourist arrivals, industrial output, agricultural output, unemployment, and consumer prices among other series are published monthly in many economies, with a lag of 1-2 months at most. Furthermore, some series such as stock market indices and interest rates are available daily with a lag of 1 day.
+
+It stands to reason that such high frequency data series contains useful information about overall economic activity and can somehow be used to assess the present state of the economy, well ahead of the official release of quarterly GDP data. Therein lies the essence and general premise of nowcasting; which is to utilize data available at higher frequencies to make predictions or nowcasts of an outcome variable that is published at a lower frequency. In the context of our paper, our motivation is to devise a framework within which to use primarily monthly high frequency economic data to make nowcasts of quarterly GDP in the Maldives.
+
+The immediate question that arises then is how best to address the problem of frequency mismatch between a low frequency target variable and higher frequency explanatory variables. Another problem that presents itself, is the fact that publication lags may potentially exist between the set of high frequency explanatory variables as well. For instance, different authorities might have different schedules for publishing data and the data itself may often become available with a lag of around 1 month. For instance, in the Maldives, unofficial tourist arrivals data is available in daily frequency with a lag of around 1 - 2 days and as a result, official monthly data on arrivals becomes available with almost no lag. However, data on tourist bednights comes out with a lag of 1 month. It follows then that at any given point of time, the set of explanatory variables may be unbalanced (i.e. have different number of observations), an issue which is referred to in the nowcasting literature as "jagged edges".
+
+The literature on nowcasting quarterly GDP is quite rich and researchers and practitioners alike have experimented with and refined a number of methodological solutions to these issues. One of the simplest methodological solutions to generate nowcasts from data observed at different frequencies are the so-called bridge equations which deal with the problem of frequency mismatch by simply aggregating the high frequency series to the target frequency [@baffigi2004; @bulligan2015; @foroni2014; @runstler2009; @schumacher2016].
+
+Another class of models commonly utilized in the literature are the Mixed Data Sampling (MIDAS) class of models developed by @ghysels2002 and refined further in subsequent work [@ghysels2007]. The MIDAS class of models can generally be divided into two strands, restricted MIDAS and unrestricted MIDAS. The principal difference between the two being that restricted MIDAS imposes restrictions on the number of parameters to be estimated to overcome the problem of parameter proliferation when large frequency mismatches exist between the outcome and explanatory variables. In economic applications, where the frequency mismatch is often not that large, the unrestricted version of MIDAS is particularly appropriate and indeed has in some studies found to outperform restricted specifications [@foroni2014]. @andreou2010, @andreou2012, and @armesto2010 provides extensive outlines of the theoretical underpinnings of the restricted MIDAS models. Notable mentions of the applications of the MIDAS class of models to nowcasting GDP include but are not limited to @claudio2020, @clements2008, @kuzin2011 and @marcellino2010.
+
+Another popular class of models used for nowcasting applications are the Dynamic Factor Models (DFMs) proposed by @stock2016. Dynamic Factor Modeling is based on the premise that the common dynamics of a large number of data series, can be explained by a few common latent factors, provided that there exists some degree of correlation between the data series [@stock2016]. Many empirical studies have established that the latter condition generally holds for macroeconomic data series [@giannone2005; @stock2012]. It is intuitive to grasp how the concept of common factors lends itself to the application of nowcasting quarterly GDP using a set of large high frequency economic data and the nowcasting literature is rife with many applications of DFMs and its variations [@banbura2013; @bok2018; @dauphin2022; @giannone2008; @giovannelli2020].
+
+In addition to bridge equations, MIDAS and DFMs, recent research has also begun to incorporate machine learning algorithms and models into nowcasting applications. @richardson2018 compared the nowcasting performance of several machine learning algorithms such as K-Nearest Neighbours, Lasso, Ridge, Elastic Net, Boosted Trees, Support Vector Regression, Neural Networks and found that they outperformed benchmark statistical models. @claveria2021 used machine learning based sentiment analyses to nowcast GDP and found that they outperformed traditional time series models. @muchisha2021 reported that machine learning models outperformed a benchmark AR1 model, and Random Forest models were found to perform best in their application of nowcasting GDP growth in Indonesia. @tiffin2016 found that Elastic Net and Random Forest models were adept at producing accurate nowcasts of GDP data in Lebanon before the official release. @bolhuis2020 in nowcasting Turkish GDP growth, found that nowcasts generated by combinations of machine learning models, reduced forecast errors by around 30 per cent compared to traditional models.
+
+In the subsequent sections of our paper, we draw from the rich literature on nowcasting GDP to set up a framework which uses a host of traditional econometric and machine learning models, to nowcast Quarterly GDP in the Maldives.
+
+# Data
+
+```{r data}
+
+# Number of observations - y
+n_obs <- 
+  df_y[["Data"]] |>
+  filter(name == "GDP at market price") |>
+  nrow()
+
+# Start date
+start_date <-
+  df_y[["Data"]] |>
+  filter(name == "GDP at market price") |>
+  arrange(date) |>
+  head(1) |>
+  pull(date) |>
+  format(format = "Q%q-%Y")  
+
+# End date
+end_date <- 
+  df_y[["Data"]] |>
+  filter(name == "GDP at market price") |>
+  arrange(date) |>
+  tail(1) |>
+  pull(date) |>
+  format(format = "Q%q-%Y")
+
+# Number of x/independent variables
+n_x <- 
+  df_x[["Meta"]] |> 
+  nrow()
+```
+
+We used multiple sources of data to compile the outcome variables, Quarterly National Accounts (QNA) published by @maldivesbureauofstatistics2024, and the explanatory variables i.e. variables used as predictors in the case of multivariate models. The quarterly national accounts data used in the paper starts from `r start_date` and ends `r end_date`, amounting to `r n_obs` observations, and therefore the explanatory variables were also limited to this time period.
+
+It should be noted that the official QNA release for Q2-2023, which was published by the Maldives Bureau of Statistics (MBS) in November 2023 after rebasing the series from base year 2014 to 2019, only contained data starting from Q1-2014, amounting to 38 data points. In publications of the QNA before it was rebased to 2019, data had been available from Q1-2003. In order to overcome the problems posed by limited number of data points in the new rebased series, the QNA data was extended by producing estimates of the data for the period from Q1-2003 to Q4-2013. The estimates were produced by converting the Annual National Accounts (ANA) (for the period from 2003 to 2013) to quarterly frequency, by benchmarking it to the QNA estimates (with base year 2014) for the corresponding period using Denton Proportional Benchmarking method[^1] [@dagum2006]. While the ideal solution would be for MBS to publish official estimates of the rebased back data in forthcoming publications of the QNA, at the time of writing Maldives Bureau of Statistics has indicated that they have no immediate plans to do so.
+
+[^1]: The estimates were produced by Mohamed Imthinan Saudulla, Senior Research Analyst at Maldives Monetary Authority.
+
+It should also be noted that the industries in Quarterly National Accounts were aggregated together for computational efficiency based on the importance of industries and how related industries are. As such, the sectors that were nowcasted in this paper were taxes less subsidies, and the industries of fisheries; wholesale and retail trade; tourism, transportation and communication; financial services; construction and real estate; public administration, health and education; and all other industries as miscellaneous. This is illustrated below in @fig-qna, where the the sectors we nowcasted are in green and for specific sectors which were aggregated, the sectors in red shows the disaggregated sectors as published in @maldivesbureauofstatistics2024.
+
+![Quarterly National Accounts](Flow%20charts/Mermaid_files/figure-commonmark/mermaid-figure-1.png){#fig-qna width="60%"}
+
+In the selection of potential independent variables, we attempted to create a dataset similar to the one used in @stock2016. The variables can be broadly categorized into activity, trade, fiscal affairs, financial conditions and prices.
+
+Moreover, we also tried to account for the criteria provided by @stock1996 as guidelines to follow which specifies that the sample should include the main monthly aggregates and coincident indicators as well as important leading economic indicators, the data should represent broad classes of variables with differing time series properties and the data should have consistent historical definition or when the definitions are inconsistent, it should be possible to adjust the series.
+
+The majority of the data were from domestic sources (including government ministries, state owned enterprises, regulatory bodies and other relevant authorities), and compiled in @maldivesmonetaryauthority2024. In addition to domestic data, prices of international commodities including the indices for all commodity prices (PALLFNF); all commodity prices except gold (PEXGALL); food and beverage prices (PFANDB); and industrial inputs prices (PINDU) published in @internationalmonetaryfund2023 as well as crude oil prices (average of Brent and WTI) published in @u.s.energyinformationadministration2023 were included as candidates for explanatory variables.
+
+This information is summarised in @tbl-data-domestic-sources and @tbl-data-external-sources below.
+
+| **Number of series** | **Type**                    |
+|----------------------|-----------------------------|
+| 44                   | Tourism indicators          |
+| 21                   | Fisheries indicators        |
+| 14                   | CPI series (levels 1 and 2) |
+| 79                   | GFS                         |
+| 78                   | Monetary                    |
+| 38                   | External                    |
+
+: Data from domestic sources {#tbl-data-domestic-sources}
+
+| **5 series from external data sources:**           |
+|----------------------------------------------------|
+| EIA Crude oil prices (Average of WTI and Bent)     |
+| IMF All commodities index (PALLFNF)                |
+| IMF All commodities excluding gold index (PEXGALL) |
+| IMF Food and beverages index (PFANDB)              |
+| IMF Industrial inputs index (PINDU)                |
+
+: Data from external sources {#tbl-data-external-sources}
+
+Furthermore, we constructed an additional `r n_x - nrow(full_inputs)` variables by aggregation of specific series, and by deflating the nominal variables. The objective of creating the set of deflated series was to remove the price effect as quarterly national accounts are also in real terms, and it is possible that the movements of the deflated series would match those of quarterly national accounts better.
+
+The full list of `r n_x` variables is provided in the Appendix @tbl-explanatory-variables.
+
+It is important to note that there were steps taken to preprocess, i.e. prepare the data for nowcasting. Firstly, in the case where the full quarter's data is not available (either only the first month or second month of data was available), the issue of jagged edges described above arose. While there are different methods of dealing with this issue, we padded the edges with univariate forecasts to complete the data. In our paper, we used an ARIMA model which was fitted to the data by minimizing the Corrected Akaike Information Criterion (AICc). It should be noted that for fish catch data was forecasted using an ARIMAX model, with fish purchases as the exogenous regressor. More detailed explanations of ARIMA and ARIMAX are available in @sec-arima and @sec-bridge respectively.
+
+Secondly, it should be noted that the dataset of explanatory variables was unbalanced, with varying starting points for different series. As in the previous case, while there are different methods of dealing with this issue, we have used a K-Nearest Neighbours regression (KNN regression) to impute the missing back data for the series that became available more recently. According to @james2021, the K-Nearest Neighbours regression is a non-parametric method (does not require the correct specification of the underlying probability distribution of the series) that identifies the "K" training observations that are most closely related to the prediction point, and estimates using the average of all the training responses. This can be mathematically expressed as
+
+$$
+\hat{f}(x_0) = \frac{1}{K} \sum_{x_i \in \mathcal{N}_0} y_i,
+$$
+
+where $x_0$ is a prediction point, and the identified training observations that are similar to $x_0$ are represented by $\mathcal{N}_0$ [@james2021].
+
+Furthermore, additional preprocessing was also carried out as required for specific models. An important point of reference for this step was the guidelines provided in @kuhn2022.
+
+# Methodology
+
+In order to generate the nowcasts from the preprocessed data, we have used an expansive methodology which incorporates a multitude of different classes of models, and combinations of these models. These include traditional econometric nowcasting models such as Bridge equations, MIDAS (Mixed Data Sampling) models, Dynamic Factor models (DFMs) and machine learning algorithms including Lasso, Ridge, Elastic Net, Random Forest, Support Vector regression, XGBoost and LightGBM.
+
+We have further produced combinations of the nowcasts generated by models, based on the best-performing models for each target sector. Lastly, we have also specified best fitting ARIMA and ETS models to generate nowcasts as well. A simple AR(1) model was specified as the benchmark model against which we evaluate the nowcast performance of the other models. The following subsections outline the theoretical underpinnings of the main classes of models that we have used in this paper, the methodology used for reconciling the nowcasts of headline Quarterly Real GDP with the nowcasts of the economic sectors, and for producing combinations of the nowcasts.
+
+## Bridge {#sec-bridge}
+
+Bridge models are one of the simplest techniques used to model mixed frequency data and have been used extensively in the literature on nowcasting quarterly GDP using monthly, weekly or daily explanatory variables [@baffigi2004; @bulligan2015; @foroni2014; @runstler2009; @schumacher2016]. The premise behind bridge models is very simple and involves the time aggregation of a set of higher frequency explanatory variables to the same frequency as the lower frequency predicted variable.
+
+The method used for time aggregation depends primarily on the stock/flow nature of the high frequency variable. Stock variables are averaged, while flow variables are summed up to aggregate the high frequency observations to the desired lower frequency [@schumacher2016].
+
+Thus, closely following @bulligan2015 and @schumacher2016 the bridge model where the target variable is observed at quarterly frequency can be generalized as follows:
+
+$$
+Y_{t_q} = \beta_0  +  \sum_{i=1}^j\beta_i(L)x_{it_q} + \epsilon_{t_q}
+$$
+
+where $y_{t_q}$ is the high frequency target variable observed at frequency $q$. The target variable is modelled on a constant $\beta_0$ and up to $j$ explanatory variables $x_{t_m}$, which are observed at the higher monthly frequency as denoted by the $m$. The high frequency variables once aggregated to the target frequency by averaging or summation, is denoted as $x_{it_q}$.
+
+The parameters $\beta_i$, ... , $\beta_j$ are then usually estimated via OLS in the literature. In addition to this, we also specify a second specification of the same bridge models with (Seasonal) ARIMA errors or (S)ARIMAX, where $\epsilon_{t_q}$ is modelled as a SARIMA (p,d,q)(P,D,Q)(4) process and the parameters are estimated via Maximum Likelihood Estimation. We further specify, each of the models estimated via OLS and MLE, in both the level and y-o-y growth of the variables, yielding the following 4 variations of the bridge equations.
+
+1.  Bridge in levels estimated via OLS
+2.  Bridge in growth estimated via OLS
+3.  Bridge in levels with ARIMA errors estimated via MLE
+4.  Bridge in growth with ARIMA errors estimated via MLE
+
+We have used the same explanatory variables for the all variants of the bridge and MIDAS models. The explanatory variables were selected primarily using judgement on the most appropriate indicators available for the respective sectors of Real GDP. It should be noted that our judgement was informed by the actual indicators that the Maldives Bureau of Statistics uses in the compilation of National Accounts statistics [@maldivesbureauofstatistics2020]. The list of explanatory variables used in the bridge and MIDAS models are outlined in @tbl-bridgemidas.
+
+```{r explanatory variables for bridge and MIDAS}
+#| label: tbl-bridgemidas
+#| tbl-cap: Explanatory variables used in Bridge and MIDAS equations
+
+y_name <- df_y[["Meta"]] |> pull(name)  
+
+y_id <- df_y[["Meta"]] |> select(id, name) |> filter(y_name %in% name) |> pull(id)
+
+table <- tibble(
+  "Dependent variable" = y_name,
+  # "Dependent variable id" = y_id,
+  "Explanatory variable" = c(
+    "Bednights from resorts",
+    "Bednights from resorts",
+    "Fish catch (forecasted using fish purchase data)",
+    "Total imports, deflated by CPI",
+    "Bednights from resorts",
+    "Arrivals",
+    "Average loans, and average deposits",
+    "Construction related imports, deflated by PINDU",
+    "Salaries and allowances, deflated by CPI",
+    "Bednights from resorts"
+  )
+)
+
+table |> 
+  flextable() |> 
+  width(j = "Dependent variable", width = 3.5) |> 
+  width(j = "Explanatory variable", width = 2.5) |> 
+  bold(part = "header")
+
+```
+
+## MIDAS
+
+The MIDAS (Mixed Data Sampling) regression framework introduced by @ghysels2002 facilitates the estimation of regressions in which the variables are sampled at different frequencies. While the bridge models can also - to a certain extent - address the problem of frequency mismatch via time aggregation, it suffers from the obvious drawback of being unable to fully capture the dynamic relationships between a low frequency target variable and a set of high frequency variables and their lags. For example, when considering the case of nowcasting quarterly GDP using a monthly set of indicators, valuable information on the different relationships between the target variable and within quarter months and their lags, cannot be fully captured when simply time-aggregating the monthly series to quarterly. The MIDAS framework overcomes this problem by offering a flexible and tractable framework that can handle frequency mismatches both between dependent and explanatory variables and within the set of explanatory variables.
+
+The MIDAS class of models are broadly categorized into unrestricted (U-MIDAS) and restricted (R-MIDAS). U-MIDAS models can be estimated via OLS, impose no restrictions on the parameters to be estimated, and are appropriate when the frequency mismatch between the variables is not very large. This is often the case in macroeconomic applications such as nowcasting GDP, where the low frequency variable is observed quarterly and the high frequency variables in monthly frequency.
+
+However, when the frequency mismatch is large (for example quarterly and daily), the number of parameters to be estimated increases substantially, resulting in the problem of parameter proliferation. Restricted MIDAS regressions address this problem by imposing restrictions on the number of parameters to be estimated via non-linear least squares (NLS) using functional lag polynomials. Given the above, the R-MIDAS model as proposed by @ghysels2002, generalized to the case of nowcasting quarterly GDP using monthly data, can be represented as follows
+
+$$
+Y_{t_q} = \beta_o + \sum_{i=1}^p\beta_iL^iY_{t_q}+ \gamma\sum_{k=1}^j \Phi(k;\theta)L_{m}^kX_t + \epsilon_t
+$$
+
+Where $Y_{t_q}$ represents the low frequency target variable observed at quarterly frequency, which is modelled on a constant $\beta_0$, up to $p$ lags of the target variable denoted by the lag operator $L^i$, and a set of high frequency variables $X_t$ and up to $j$ lags. The function $\phi(k;\theta)$ is a polynomial that determines the weights for temporal aggregation and can have a number of functional forms such as the beta formulation used by @ghysels2002 or the exponential Almon lag specification used by @ghysels2007 which is outlined below $$ \phi(k;\theta_1,\theta_2) = \frac{exp(\theta_1k + \theta_2k^2)}{\sum_{j=1}^Mexp(\theta_1j + \theta_2j^2)}$$
+
+The hyperparameters $\theta_1$ and $\theta_2$ dictate the shape of the weighting function. In this paper we have used only the exponential Almon lag polynomial function in our R-MIDAS models. In order to estimate the MIDAS models, we have utilized the R package `midasr` developed by @ghysels2016. The full list of explanatory variables used in the MIDAS equations are outlined in @tbl-bridgemidas.
+
+## ARIMA {#sec-arima}
+
+ARIMA is an acronym for (Auto Regressive Integrated Moving Average) and is one of the most widely utilized univariate time-series modelling and forecasting techniques. As the name implies, the ARIMA model is comprised of three main components; namely the autoregressive (AR) component which captures the relationship between a variable and its past observations; the integration (I) component which specifies the degree to which the series is differenced to achieve stationarity; and finally the moving average (MA) component which captures the relationship between the variable and its historic error terms in a specified model [@hyndman2021].
+
+Following @hyndman2021 the ARIMA model with $p$ autoregressive terms, $d$ degrees of differencing, and $q$ moving average terms or the $ARIMA(p,d,q)$ with a constant can be generally written as:
+
+$$
+y_t = \beta_o + \phi_1y_{t-1} + ... + \phi_py_{t-p} + \theta_1\epsilon_{t-1} + ... +\theta_q\epsilon_{t-q} + \epsilon_t
+$$
+
+Written in backshift notation using the backshift operator $B$, the above model can be rewritten as:
+
+$$
+ (1-\phi_1 B - ... - \phi_p B^p) (1-B)^dy_t = \beta_o + (1 + \theta_1 B + ... \theta_q B^q)\epsilon_t
+$$
+
+The general case above can be extended to control for the effects of seasonality and the Seasonal ARIMA model is generally reported as $ARIMA(p,d,q)(P,D,Q)m$, where the uppercase notation represents the orders of the autoregressive, differencing and moving average terms for the seasonal component of the model, and the $m$ represents the seasonal period or the number of observations per year (i.e m=4 for quarterly data and m=12 for monthly data). The general SARIMA model (with no constant) can also be expressed using back shift notation as follows
+
+$$
+\begin{aligned}
+& (1 - \phi_1B -  \ldots - \phi_pB^p)(1 - \Phi_1B^m - \ldots - \Phi_PB^{Pm})(1 - B)^d(1 - B^n)^D y_t = \\
+& (1 + \theta_1B + \ldots + \theta_qB^q)(1 + \Theta_1B^m + \ldots + \Theta_QB^{Qm})\epsilon_t & \\
+\end{aligned}
+$$
+
+In the econometric forecasting literature, it is common practice to utilize simple ARIMA models as benchmark models to gauge the forecast performance of other models. In our nowcasting application, we have utilized a simple first-order autoregressive model or $ARIMA(1,0,0)(0,0,0)4$. Additionally the best-fitting ARIMA models have also been used to generate nowcasts. The "best-fitting" ARIMA models are the models with the permutation of $(p,d,q)$ and $(P,D,Q)$ orders that minimizes the Corrected Akaike Information Criterion, $AIC_c$ (Akaike Information Criterion corrected for small sample bias).
+
+@hyndman2021 notes that for an $ARIMA(p,d,q)$ model, the $AIC$ is usually written as
+
+$$
+AIC = -2log(L) + 2(p+q+k+1)
+$$
+
+where $L$ represents the likelihood of the data, and, $k=1 \space if \space c\neq0$ and $k=0 \space if \space c=0$.
+
+Considering the above, the Corrected AIC is written as
+
+$$
+AIC_C = AIC + \frac{2(p+q+k+1)(p+q+k+2)}{T-p-q-k-2}
+$$
+
+## ETS
+
+The ETS (Error, Trend, Seasonality) model is a univariate time-series model that is based on the concept of exponential smoothing. ETS models are a more refined version of the Simple Exponential Smoothing models, that produce forecasts by assigning decaying weights to past observations of itself. While SES models are appropriate for modeling data series with no discernible trend or seasonal patterns, the ETS can be considered an extension of SES that can handle trends and seasonality in the data [@hyndman2021].
+
+As the name implies, ETS models time series by decomposing it into three main components: Error, Trend, and Seasonality. The error component captures the stochastic volatility in a time-series, while the trend component captures the general direction or movement of the series, and the seasonality component captures time patterns in the data [@hyndman2021].
+
+The trend component can take the form additive, denoted by $A$ , whereby the historically observed trend is assumed to carry on indefinitely into the future, or additive damped denoted as $A_d$ , whereby the trend is "dampened" by a smoothing parameter. Additionally, seasonal component can be either additive or multiplicative processes, denoted as $A$ and $M$ respectively. The case where neither process is present is denoted by $N$. Lastly, the each of the models with the above permutations can either have additive or multiplicative errors, denoted respectively by $A$ or $M$
+
+Thus, the ETS model can be specified as $ETS(.,.,.)$ with the following possibilities for for each of the three components, $E = [A,M]$ , $T= [N,A,A_d]$ and $S = [N,A,M]$. For a given time-series, the best-fitting specification is the combination that minimizes the $AIC_c$ whereby
+
+$$
+\begin{aligned}
+& AIC = -2 log(L) +2 k \\
+ \\
+& AIC_c = AIC + \frac{2k(k+1)}{T-k-1}
+\end{aligned}
+$$
+
+where $L$ is the likelihood of the model and $k$ represents the number of parameters and initial states, and $T$ the number of observations in the sample [@hyndman2021].
+
+## Neural Network Autoregression (NNAR)
+
+Neural Network Autoregressions are an advanced class of models that combine traditional autoregressive (AR) modelling with the architectural framework of Neural Networks. Neural Networks models are organized in layers and take input from the bottom layers to produce a forecast in the top output layer. The simplest Neural Networks are easy to conceptualize, as they contain no intermediate hidden layers, and take inputs from $n$ number of predictors in a single layer to produce an output or a forecast. This simplest form of Neural Networks can be thought of as a counterpart to a linear regression with $n$ explanatory variables.
+
+The neural network counterpart to the $n * 1$ coefficients attached to the predictors in a linear regression, are called weights on the predictors, which are selected through a learning algorithm that seeks to minimize a traditional loss function such as MSE or RMSE. The neural network becomes non-linear, when hidden intermediate layers, are included in the network. In practice, the number of hidden layer and number of nodes in each layer are specified by the researcher, and are usually selected through cross-validation [@hyndman2021].
+
+In a Neural Network Autoregression, the lags of a time series can be used as predictors or inputs to the network. We follow the notation used in @hyndman2021 to specify the Neural Network Model as $NNAR(p,k)$, where $p$ determine the number of lags used as inputs for the network, and $k$ denotes the number of nodes in the hidden layer. Thus it follows that a $NNAR(p,k)$ model is neural network where $\sum_{i=1}^pY_{t-i}$ lags are used as inputs to forecast $Yt$, in a network that contains a hidden layer with $k$ nodes.
+
+The NNAR can also handle seasonality by including seasonal autoregressive terms. Closely following the standard notation for reporting SARIMA models, an $NNAR(p,P,k)m$ model takes $p$ lags and $P$ seasonal lags as inputs in the network with $k$ nodes in the hidden layer [@hyndman2021].
+
+## Temporal Hierarchical Forecasting (Thief)
+
+Temporal Hierarchical Forecasting (Thief) models introduced by @athanasopoulos2017 is based on the idea of producing reconciling independent forecasts of the different temporal hierarchies of a time series. For a time-series observed at a given frequency $m$, it is possible to construct several non-overlapping aggregate series at different frequencies up to the annual frequency. @athanasopoulos2017 defines temporal hierarchies as "the structural connection across the levels of aggregation." It is notable that the Thief framework is model-independent, and can incorporate any time-series models such as ARIMA and ETS
+
+For a time-series observed at monthly frequency, it is possible to create aggregated series at quarterly and annual frequency. Indeed, it is also possible to create even more uncommon aggregations of 2-month, 4-month or 6-month series. In theory, for a monthly series, any $k$ aggregate series can be constructed provided that $k$ is a factor of 12, and has a seasonal period, $12/k$.
+
+More generally for a time series $y_t$ observed at frequency $m$, the $k$ aggregate series can be mathematically written as
+
+$$
+y_{j}^{[k]} = \sum_{t=t^* + (j-1)k}^{t^* +jk-1}y_t
+$$
+
+where $j = 1, \dots, [T/k]$ and $M_k = m/k$ is the seasonal period
+
+## Ridge regression, Lasso and Elastic Net
+
+Ridge regression, lasso (Least Absolute Shrinkage and Selection Operator) and elastic net are modified linear regression methods that introduce different types of penalties that are imposed on the use of coefficients to enhance prediction accuracy (commonly referred to as regularization) [@dauphin2022]. Constraining or regularizing the coefficient estimates, or equivalently, shrinking the coefficient estimates towards zero has the benefit that it can significantly reduce their variance [@james2021].
+
+@james2021 explained that the ordinary least squares (OLS) fitting procedure estimates the parameters ($\beta_0, \beta_1, ..., \beta_p$) using the value that minimizes the residual sum of squares (RSS) as shown below;
+
+$$
+RSS = \sum_{i = 1}^{n} (y_i - \beta_0 - \sum_{j = 1}^p \beta_j x_{ij})^2.
+$$
+
+While ridge regression is very similar to OLS, it estimates the ridge regression coefficient estimates $(\hat{\beta}^R)$ by minimizing a slightly different quantity,
+
+$$
+\begin{aligned}
+&\sum_{i = 1}^{n} (y_i - \beta_0 - \sum_{j = 1}^p \beta_j x_{ij})^2 + \lambda \sum_{j = 1}^p \beta_j^2 \\
+&= RSS + \lambda \sum_{j = 1}^p \beta_j^2,
+\end{aligned} 
+$$
+
+where $\lambda \geq 0$ is tuning parameter to be determined separately. Similarly to the OLS, ridge regression seeks coefficient estimates that fit the data well by minimizing the RSS, but adds a second term, the shrinkage penalty, $(\lambda \sum_j \beta_j^2)$, which shrinks the estimates of $\beta_j$ [@james2021]. The authors [-@james2021] explained further that the tuning parameter $\lambda$ controls the relative impact of these two terms on the coefficient estimates, whereby $\lambda = 0$ would produce OLS estimates and as $\lambda \rightarrow \infty$, the impact of the shrinkage penalty grows and the ridge regression coefficient estimates will approach zero. However, it should be noted that while increasing the $\lambda$ will tend to reduce the magnitudes of the coefficients, it will not result in exclusion of any of the variables (unless $\lambda = \infty$).
+
+According to @james2021, the lasso is a more recent alternative to the ridge regression that overcomes this by changing the objective function slightly whereby the lasso coefficients $(\hat{\beta}^L)$ minimize the quantity
+
+$$
+\begin{aligned}
+&\sum_{i = 1}^{n} (y_i - \beta_0 - \sum_{j = 1}^p \beta_j x_{ij})^2 + \lambda \sum_{j = 1}^p |\beta_j| \\
+&= RSS + \lambda \sum_{j = 1}^p |\beta_j|.
+\end{aligned}
+$$
+
+As with the ridge regression, the lasso shrinks the coefficient estimates towards zero, but it has the effect of forcing some of the coefficient estimates to be exactly equal to zero when the tuning parameter $\lambda$ is sufficiently large [@james2021]. The authors [-@james2021] noted that although it leads to models that are more interpretable, it does not necessarily improve prediction accuracy.
+
+Finally, elastic net introduced the elastic net penalty whereby the objective function is specified as
+
+$$
+\begin{aligned}
+&\sum_{i = 1}^{n} (y_i - \beta_0 - \sum_{j = 1}^p \beta_j x_{ij})^2 + \lambda \sum_{j = 1}^p (\alpha \beta^2_j + (1-\alpha) |\beta_j|) \\
+&= RSS + \lambda \sum_{j = 1}^p (\alpha \beta^2_j + (1-\alpha) |\beta_j|),
+\end{aligned}
+$$
+
+which allows the model to select variables like the lasso and shrink the coefficients of correlated predictors like ridge, and the parameter term $\alpha$ determines the mix of the penalties [@hastie2009].
+
+## Support Vector Regression
+
+Support vector regressions seek coefficient estimates that minimizes loss differently, where only residuals larger in absolute value than some positive constant $(\epsilon)$ contribute to the loss function [@james2021].
+
+According to @hastie2009, to estimate the regression coefficients, the support vector regression minimizes the objective function,
+
+$$
+\begin{aligned}
+H (\beta, \beta_0) &= \sum_{i = 1}^N V(y_i - f(x_i)) + \frac{\lambda}{2} ||\beta||^2, \\
+f(x) &= x^T \beta + \beta_0,
+\end{aligned}
+$$
+
+where
+
+$$
+V_\epsilon(r) =   
+  \begin{cases}
+     0              & \text{if } |r| < \epsilon, \\
+     |r| - \epsilon & \text{otherwise}.
+  \end{cases}
+$$
+
+This illustrates the "$\epsilon$-insensitive" error measure as it ignores residuals or errors that are greater than $\epsilon$ [@hastie2009]. The authors [-@hastie2009] further explained that this has the benefit of making the fitting less sensitive to outliers in addition to flattening the contributions of the cases with small residuals.
+
+Additionally, it should be noted that while $\epsilon$ is a parameter of the loss function $V_\epsilon$, the quantity $\lambda$ is a more traditional regularization parameter as seen above [@hastie2009].
+
+According to @kuhn2013, the support vector regression can be extended to adapt to nonlinear relationships, by using different types of kernel functions to generalize the regression model and encompass nonlinear functions of the predictors.
+
+@dauphin2022 explained that while support vector regressions can overcome the drawbacks of linear regression models including linearity, collinearity, overfitting, and high dimension issues, the performance depends on the proper selection of the kernel function and regularization parameters. However, the authors [-@dauphin2022] further noted that complicated kernel functions or parameters may limit the model's interpretability.
+
+## Random Forests
+
+According to [@james2021], bootstrapping is the process of taking repeated samples from a single training data set and generating different training data sets. Random forests build a number of decision trees on such bootstrapped training samples and averages all the predictions [@james2021]. However, in the process of building the decision trees, a random sample of predictors is chosen as candidates at each split in the tree [@james2021].
+
+The authors [-@james2021] further explained that this process ensures that the different bootstrapped decision trees are not highly correlated, as it forces each split to consider only a subset of predictors -- a process that can be considered as decorrelating the trees, and hence the average of the resulting trees are less variable and more reliable.
+
+The main tuning parameters of the model include the number of randomly selected predictors to choose from at each split and the number of decision trees to be trained [@kuhn2013].
+
+## Gradient Boosting
+
+Boosting is a general approach that can be applied to many statistical learning methods for regression or classification [@james2021]. While originally, boosting models were developed for classification problems and later extended to the regression setting, Friedman's stochastic gradient boosting machine had become widely accepted as the boosting algorithm of choice [@kuhn2013].
+
+According to @james2021, gradient boosting grows decision trees sequentially, with each tree using information from previously grown trees. However, instead of bootstrap sampling, it fits a tree on a modified version of the original data set [@james2021].
+
+Gradient boosting has three main tuning parameters -- the number of trees which determines whether the model overfits, the shrinkage parameter $\lambda$ which controls the rate at which the boosting learns, and the number of splits in each tree which controls the complexity of the boosted ensemble or the interaction depth of the model [@james2021].
+
+It should be noted that while constraining the learning process with a small $\lambda$ is important to avoid overfitting, a very small $\lambda$ can require training a large number of trees in order to achieve good performance, and therefore the value of the shrinkage parameter is inversely proportional to the computation time required to find an optimal model [@james2021; @kuhn2013].
+
+The algorithms that we used for gradient boosting are XGBoost (eXtreme Gradient Boosting) and LightGBM (Light Gradient Boosting Machine).
+
+## Dynamic Factor Models
+
+According to @stock2016, dynamic factor models (DFMs) is based on the general idea that the common dynamics of a large number of time series variables stem from a relatively small number of unobserved or latent factors that evolve over time. @banbura2013 explained that if there is a high degree of co-movement amongst the series, the bulk of the dynamics can be captured by a few factors. The author [-@banbura2013] further showed that there is considerable empirical evidence for this in the case of large panels of macroeconomic variables.
+
+In dynamic factor models, each series is modelled as the sum of two orthogonal or independent components -- a common component driven by a handful of unobserved factors which captures the joint dynamics, and idiosyncratic residuals which captures any remaining individual movement [@banbura2013; @stock2016].
+
+According to @banbura2013, the most common version of dynamic factor models, in the context of nowcasting, specifies that the high frequency variables, $Y_t$ , have a factor structure and that the factors, $F_t$, follow a vector autoregressive (VAR) process as shown below.
+
+$$
+\begin{aligned}
+Y_t &= \mu + \Lambda F_t + E_t \ \ \ \ \ &E_t ~ i.i.d. N(0, \Sigma_E) \\
+F_t &= \Phi (L) F_t + U_t \ \ \ \ \ &U_t ~ i.i.d. N(0, \Sigma_U)
+\end{aligned}
+$$
+
+@banbura2013 further explained that following estimates of the factors, nowcasts are obtained via a regression of GDP on temporally aggregated factor estimates, which can be mathematically expressed as:
+
+$$
+y_{t,1}^{k_1} = \alpha + \beta F_{t, \Omega_v}^{k_1} + e_t^{k1},\ \ t = k_1, 2k_1,... \ .
+$$
+
+In this paper, in order to test and see which whether subsets of variables improved on the performance of the model, we have run dynamic factor models with four different variations of the full data set;
+
+1.  Using both nominal and real variables
+
+2.  Using only nominal variables
+
+3.  Using only real variables
+
+4.  Providing the important variables selected by lasso
+
+## Model Stacking
+
+According to @kuhn2022, model stacking is a method of creating a model ensemble, where the predictions of multiple single learners or models are aggregated to make one prediction and produce a high-performance final model. The candidates to be included in the stack can include different types of models as well as different configurations of the same model [@kuhn2022].
+
+In order to assess the candidate models for a model stack, a meta-learning model is created from the training set predictions and the corresponding observed outcome data [@kuhn2022]. The authors [-@kuhn2022] further explained that while any model can be used for meta-learning, the most commonly used model is a regularized general linear model -- specifically one regularized via the lasso penalty. Advantages of using a lasso include the ability to remove candidates or model types from the ensemble, and the alleviation of the correlation between the candidate models [@kuhn2022].
+
+In this paper, all models that were supported by the `R` package `tidymodels` and had no computational issues were provided as candidates for the model stack -- which would include all models except bridge, MIDAS, DFMs, and the univariate models. Additionally, Support Vector Regression and LightGBM were also excluded due to issues that arose in the stacking process when they were included, whereby the weights given to these models and the resulting forecasts were not sensible or resulted in numeric instabilities.
+
+It should be noted that while it is possible to use ridge and elastic net as meta-learning models for the process of model stacking as well, we only used lasso due to the increased computational burden and the similarities in the model performance based on preliminary experiments.
+
+## Reconciliation
+
+In the paper, we have nowcasted both GDP and the production side sectors which leads to a need to produce coherent forecasts, i.e. forecasts that adhere to aggregation constraints. Additionally, it is logical to assume different methods may perform better for different sectors as the time series have different features in them, which resulted in a need to be able to possibly combine forecasts from different models for different sectors. Therefore, an important step to tie all the forecasts together is forecast reconciliation. In addition to being able to produce coherent forecasts, @athanasopoulos2020 has demonstrated that in many empirical settings, forecast reconciliation methods improve forecast accuracy as well.
+
+The details for the reconciliation methods used in this paper are provided in the following subsections.
+
+### Bottom-up
+
+According to @athanasopoulos2020, in the bottom-up approach, forecasts for the most disaggregate level are aggregated to obtain forecasts for other series in the hierarchy. A set of coherent forecasts for the whole hierarchy using the bottom-up approach is given by;
+
+$$
+\tilde{y}_{T+h|T}^{BU} = S \hat{b}_{T+h|T},
+$$ where $\hat{b}_{T+h|T}$ refers to the bottom-level forecasts and $S$ refers to the summing matrix which reflects the linear aggregations constraints and in particular, how the bottom-level series aggregate to levels above [@athanasopoulos2020].
+
+An important point to consider is that while bottom-up forecasts has the advantage of no information being lost due to aggregation, bottom-level data can potentially be highly volatile or very noisy which could make it more challenging to forecast [@athanasopoulos2020].
+
+### Optimal Minimum Trace (MinT) Reconciliation
+
+According to @athanasopoulos2020, single-level approaches such as bottom-up approach uses information from a single level of aggregation and ignores any correlations across levels of a hierarchy, which leads us to MinT reconciliation. In MinT reconciliation, forecasts for all series across all levels of hierarchy are produced (referred to as base forecasts), before the base forecasts are adjusted to produce coherent forecasts and it incorporates the full correlation structure of the hierarchy [@athanasopoulos2020].
+
+This is mathematically expressed as;
+
+$$
+\begin{aligned}
+\tilde{y}_{T+h|T} &= S G \hat{y}_{T+h|T}, \\
+G &= (S' W_h^{-1} S)^{-1} S' W_h^{-1},
+\end{aligned}
+$$ where $G$ is a matrix that produces and adjusts the forecasts for reconciliation [@athanasopoulos2020]. The authors [-@athanasopoulos2020] noted that a crucial challenge is estimating $W_h$ and there are different possible alternative estimators for it. Following subsections detail the two main methods that we have used in the paper.
+
+#### Weighted Least Squares (WLS)
+
+The weighted least squares (WLS) estimator sets $W_h = k_h \text{diag}(\hat{W}_1)$ for all $h (k_h > 0)$, where
+
+$$
+\hat{W}_1 = \frac{1}{T} \sum_{t = 1}^T \hat{e}_t \hat{e}_t'
+$$
+
+is the unbiased sample estimator of the in-sample one-step-ahead base forecast errors [@athanasopoulos2020]. The estimator scales the base forecasts using the variance of the in-sample residuals, and hence is described and referred to as the weighted least squares estimator applying variance scaling [@athanasopoulos2020].
+
+#### MinT (Shrink)
+
+@athanasopoulos2020 explained that the MinT (Shrink) estimator sets $W_h = k_h \hat{W}_1^D$ for all $h (k_h > 0)$, where $\hat{W}_1^D = \lambda_D \text{diag}(\hat{W}_1) + (1-\lambda_D) \hat{W}_1$ is a shrinkage estimator with diagonal target and shrinkage intensity parameter
+
+$$
+\hat{\lambda}_D = \frac{ \sum_{i \neq j} \hat{Var}(\hat{r}_{ij}) } { \sum_{i \neq j} \hat{r}_{ij}^2 },
+$$
+
+where $\hat{r}_{ij}$ refers to the $(i, j)$ element of $\hat{R}_1$, the one-step-ahead sample correlation matrix. Therefore, the off-diagonal elements of $\hat{W}_1$ are shrunk towards zero while the diagonal elements (variances) remain unchanged [@athanasopoulos2020].
+
+### Combinations
+
+In this section, we will detail how we selected the best models for each sector and used forecast reconciliation methods to combine different models into a coherent forecast. As such, the two main criteria that we have used are;
+
+1.  Whether we should take only the months with full quarterly data available or all months, some of which would have partial quarterly data with ARIMA forecasts used to pad the remaining months in the quarter.
+2.  When selecting the best model, whether we should check the entire experiment or whether we should only look at the past 12 months. As a side effect, when the entire experiment is checked, the combination remains static throughout the experiment, while when only the past 12 months are taken, the combination is dynamic with different models being selected based on its recent performance.
+
+This allowed us to create four combinations as illustrated below;
+
+|                               | **Dynamic**   | **Static**    |
+|-------------------------------|---------------|---------------|
+| **Padded with forecasts**     | Combination 1 | Combination 3 |
+| **Not padded with forecasts** | Combination 2 | Combination 4 |
+
+: Combinations created using forecast reconciliation methods.
+
+# Experiment
+
+```{r experiment}
+# Setting up experiment start date and windows
+end_train <- "Dec 2017" |> as.yearmon()
+
+max_date <-
+  df_y[["Data"]] |>
+  pull(date) |>
+  max() |>
+  as.yearmon() + 2 / 12
+
+min_date <- 
+  df_y[["Data"]] |> 
+  pull(date) |> 
+  min() |> 
+  as.yearmon()
+
+# All windows
+windows_df <- 
+  df_x[["Data"]] |>
+  distinct(date) |>
+  filter(date > end_train & date <= max_date)
+
+# Number of windows
+windows <-
+  windows_df |>
+  nrow()
+
+# First window info
+first_window_start_date <- 
+  windows_df |> 
+  filter(date > end_train + 1) |> 
+  head(1) |> 
+  pull(date)
+
+first_window_obs <- 
+  df_x[["Data"]] |> 
+  distinct(date) |> 
+  filter(date >= min_date & date < first_window_start_date) |> 
+  nrow()
+
+# Last window info
+last_window_start_date <- 
+  windows_df |> 
+  tail(1) |> 
+  pull(date)
+
+last_window_obs <- 
+  df_x[["Data"]] |> 
+  distinct(date) |> 
+  filter(date >= min_date & date < last_window_start_date) |> 
+  nrow()
+```
+
+In order to assess the best models for nowcasting, an expanding widow experiment was run from `r format(first_window_start_date, format = "%B %Y")` to `r format(max_date, format = "%B %Y")`, with `r (windows - 12)` windows. The first window which started from `r format(first_window_start_date, format = "%B %Y")` used all data until then and therefore has `r first_window_obs` monthly data points, while the last window which started from `r format(last_window_start_date, format = "%B %Y")` has `r last_window_obs` monthly data points.
+
+Importantly, the experiment was conducted on a monthly frequency which allows us to see how the models perform when full data for a quarter is available as opposed to when the variables are padded with forecasts to complete the quarter.
+
+The main measures used to assess the models was Root Mean Squared Error (RMSE). The following is a mathematical representation of the measure as shown in @hyndman2021;
+
+$$
+\begin{aligned}
+\mathrm{RMSE} &= \sqrt{\mathrm{mean}(e_t^2)}, \\
+\mathrm{where} \ e_{T+h} &= y_{T+h} - \hat{y}_{T+h}.
+\end{aligned}
+$$
+
+The models were also assessed based on their performance in nowcasting only the headline quarterly GDP, only the sector level series and all series combined. This enabled us to be able to look for differences in performance and look deeper into why a model may perform better or worse.
+
+In addition to evaluating the performance of the nowcasts using RMSE, the nowcasts generated from all models werel also compared with the nowcasts obtained from a benchmark AR1 model, at a forecast horizon of one quarter ahead. This allowed us to gauge the performance gains of each model compared to the benchmark model. The "Percentage change" column in @tbl-rmse-all-series, @tbl-rmse-top-series , and @tbl-rmse-bottom-series shows the improvement in RMSE for each respective model compared to the RMSE of the benchmark model. A negative figure represents an improvement over the benchmark model (i.e lower RMSE of the respective model compared to the benchmark model).
+
+# Results
+
+```{r results}
+# Importing experiment df
+experiment_df <- 
+  read_parquet("Scripts/final_experiment_file.parquet")
+
+# Total number of potential models
+total_models <- 
+  experiment_df |> 
+  distinct(model) |> 
+  nrow()
+
+# Total number of non-reconciled models
+total_nonrec_models <- 
+  experiment_df |> 
+  filter(!str_detect(model, "Rec")) |> 
+  distinct(model) |> 
+  nrow()
+
+# Total number of reconciled models
+total_rec_models <- 
+  experiment_df |> 
+  filter(str_detect(model, "Rec")) |> 
+  distinct(model) |> 
+  nrow()
+
+# Combinations
+total_combinations <- 
+  experiment_df |> 
+  filter(str_detect(model, "Combination")) |> 
+  pull(model) |>
+  word(1) |>
+  unique() |> 
+  length()
+```
+
+In the experiment, we had tested `r total_models` models, from which `r total_nonrec_models` are the base models (variations of model classes without any forecast reconciliation applied). With three types of reconciliation applied to the models and `r total_combinations` combinations created, a total of `r total_rec_models` reconciled models were tested. In this section, only the reconciled models were considered as we require coherent nowcasts i.e. nowcasts that adhere to the aggregation constraints.
+
+When examining the results, we initially checked the error measure of RMSE for all series, with both the months that were padded with forecasts as well as quarters with full data as shown in @tbl-rmse-all-series below.
+
+```{r rmse_calculations}
+## RMSE for all series
+rmse_all <-
+  experiment_df |>
+  filter(h == 1 & (str_detect(model, "Rec_") | model == "AR1")) |>
+  group_by(model) |>
+  summarise(
+    rmse = sqrt(mean(error^2)),
+    .groups = "drop"
+  ) |>
+  arrange(rmse)
+
+# Benchmark model - RMSE
+benchmark_rmse <- 
+  rmse_all |> 
+  filter(model == "AR1") |> 
+  pull(rmse)
+
+# Adding proportion/percentage change
+rmse_all <- 
+  rmse_all |> 
+  mutate(percentage_change = round(rmse/benchmark_rmse * 100 - 100,
+                                   digits = 2)) |> 
+  rename(
+    "Model" = model,
+    "RMSE" = rmse,
+    "Percentage change" = percentage_change
+  )
+
+# Best performing models
+best_model1 <- rmse_all |> slice(1) |> pull(Model)
+best_model2 <- rmse_all |> slice(2) |> pull(Model)
+best_model3 <- rmse_all |> slice(3) |> pull(Model)
+
+cleaned_name_bestmodel1 <- 
+  str_replace_all(best_model1, "_", " ") |> 
+  str_replace("Rec", "reconciled using") |> 
+  str_replace("BU", "bottom-up approach") |> 
+  str_replace("WLS", "WLS approach") |> 
+  str_replace("MinT", "MinT (Shrink)")
+
+cleaned_name_bestmodel2 <- 
+  str_replace_all(best_model2, "_", " ") |> 
+  str_replace("Rec", "reconciled using") |> 
+  str_replace("BU", "bottom-up approach") |> 
+  str_replace("WLS", "WLS approach") |> 
+  str_replace("MinT", "MinT (Shrink)")
+
+cleaned_name_bestmodel3 <- 
+  str_replace_all(best_model3, "_", " ") |> 
+  str_replace("Rec", "reconciled using") |> 
+  str_replace("BU", "bottom-up approach") |> 
+  str_replace("WLS", "WLS approach") |> 
+  str_replace("MinT", "MinT (Shrink)")
+
+improvement_bestmodel <- 
+  rmse_all |> 
+  slice(1) |> 
+  pull("Percentage change") |> 
+  round(digits = 0) |> 
+  abs()
+
+## RMSE for top level
+rmse_top <-
+  experiment_df |>
+  filter(h == 1 & (str_detect(model, "Rec_") | model == "AR1") &
+           series == "GDP at market price") |>
+  group_by(model) |>
+  summarise(
+    rmse = sqrt(mean(error^2)),
+    .groups = "drop"
+  ) |>
+  arrange(rmse)
+
+# Benchmark model - RMSE
+benchmark_rmse <- 
+  rmse_top |> 
+  filter(model == "AR1") |> 
+  pull(rmse)
+
+# Adding proportion/percentage change
+rmse_top <- 
+  rmse_top |> 
+  mutate(percentage_change = round(rmse/benchmark_rmse * 100 - 100,
+                                   digits = 2)) |> 
+  rename(
+    "Model" = model,
+    "RMSE" = rmse,
+    "Percentage change" = percentage_change
+  )
+
+
+## RMSE for bottom level
+rmse_bottom <-
+  experiment_df |>
+  filter(h == 1 & (str_detect(model, "Rec_") | model == "AR1") &
+           series != "GDP at market price") |>
+  group_by(model) |>
+  summarise(
+    rmse = sqrt(mean(error^2)),
+    .groups = "drop"
+  ) |>
+  arrange(rmse)
+
+# Benchmark model - RMSE
+benchmark_rmse <- 
+  rmse_bottom |> 
+  filter(model == "AR1") |> 
+  pull(rmse)
+
+# Adding proportion/percentage change
+rmse_bottom <- 
+  rmse_bottom |> 
+  mutate(percentage_change = round(rmse/benchmark_rmse * 100 - 100,
+                                   digits = 2)) |> 
+  rename(
+    "Model" = model,
+    "RMSE" = rmse,
+    "Percentage change" = percentage_change
+  )
+```
+
+```{r table_rmse_all_series}
+#| label: tbl-rmse-all-series
+#| tbl-cap: Top 10 models for all series based on RMSE for the forecast horizon of one quarter ahead. Percentage change shows the change in RMSE when compared to the benchmark model, AR1.
+
+rmse_all |> 
+  head(10) |> 
+  flextable() |> 
+  width(j = "Model", width = 3) |> 
+  width(j = "RMSE", width = 1.5) |> 
+  width(j = "Percentage change", width = 1.5) |>
+  bold(part = "header")
+```
+
+In terms of model classes, it can be seen that the best-performing models are the reconciled forecast combinations and the bridge equations with ARIMA errors. Specifically, the three best-performing models are `r cleaned_name_bestmodel1` (`r best_model1`), `r cleaned_name_bestmodel2` (`r best_model2`) and `r cleaned_name_bestmodel3` (`r best_model3`). The best model performed significantly better over the benchmark model, showing approximately `r improvement_bestmodel`% lower RMSE for all series. We had similar findings when examining just the top level quarterly GDP series, and just the sectors of GDP as shown in @tbl-rmse-top-series and @tbl-rmse-bottom-series respectively. The RMSE's for the full list of models can be found in @tbl-rmse-all-series-all-models, @tbl-rmse-top-series-all-models, and @tbl-rmse-bottom-series-all-models in the Appendix.
+
+```{r table_rmse_top_series}
+#| label: tbl-rmse-top-series
+#| tbl-cap: Top 10 models for headline quarterly GDP based on RMSE for the forecast horizon of one quarter ahead. Percentage change shows the change in RMSE when compared to the benchmark model, AR1.
+
+rmse_top |> 
+  head(10) |> 
+  flextable() |> 
+  width(j = "Model", width = 3) |> 
+  width(j = "RMSE", width = 1.5) |> 
+  width(j = "Percentage change", width = 1.5) |> 
+  bold(part = "header")
+```
+
+```{r table_rmse_bottom_series}
+#| label: tbl-rmse-bottom-series
+#| tbl-cap: Top 10 models for the sectors of GDP (bottom level series) based on RMSE for the forecast horizon of one quarter ahead. Percentage change shows the change in RMSE when compared to the benchmark model, AR1.
+
+rmse_bottom |> 
+  head(10) |> 
+  flextable() |> 
+  width(j = "Model", width = 3) |> 
+  width(j = "RMSE", width = 1.5) |> 
+  width(j = "Percentage change", width = 1.5) |> 
+  bold(part = "header")
+```
+
+```{r padding_df}
+# Calculating the effect of padding
+order <- df_y[["Meta"]] |> pull(name)
+
+padding_difference_df <- 
+  experiment_df |>
+  filter(h == 1 & 
+           model == best_model1) |>
+  group_by(series, padded) |>
+  summarise(
+    rmse = sqrt(mean(error^2)),
+    .groups = "drop"
+  ) |> 
+  pivot_wider(
+    id_cols = series,
+    names_from = padded,
+    values_from = rmse
+  ) |>
+  mutate(
+    percentage_change = round(not_padded/padded * 100 - 100, digits = 2)
+  ) |> 
+  select(series, not_padded, padded, percentage_change) |> 
+  arrange(match(series, order)) |> 
+  rename(
+    Series = series,
+    "Not padded" = not_padded,
+    Padded = padded,
+    "Percentage change" = percentage_change
+  )
+
+# Percentage change for headline
+padding_perc_change <- 
+  padding_difference_df |> 
+  slice(1) |> 
+  pull("Percentage change") |> 
+  round(digits = 0) |> 
+  abs()
+```
+
+Additionally, we examined the difference in performance of the best model based on whether the jagged edges have been padded with forecasts or not and the results can be seen in @tbl-padding-difference. As expected, when the full data for the quarter is available, the performance of the model for all sectors are significantly better on average, with the nowcast for the headline GDP's error being `r padding_perc_change`% lower. This is mainly due to the fact that in the case of forecast padding, any forecast errors for the padded forecast themselves will be carried forward into the errors of the nowcast. This could signify potential room for improvement in the methodology used to pad the jagged edges.
+
+```{r padding_difference}
+#| label: tbl-padding-difference
+#| tbl-cap: Difference in RMSE of the selected best model, based on whether full data is available for the quarter or whether only partial data is available and had been padded with forecasts. Percentage change shows the difference in performance of nowcasts without padding compared to when padded.
+
+# Flextable
+padding_difference_df |>
+  flextable() |> 
+  width(j = "Series", width = 3) |> 
+  width(j = "Not padded", width = 1) |> 
+  width(j = "Padded", width = 1) |> 
+  width(j = "Percentage change", width = 1) |> 
+  bold(part = "header")
+```
+
+@tbl-rmse-best-model below provides details of the selected best model, `r best_model1`, including the specific models used to create the combination in addition to the RMSE of the individual models. It can be seen that in series where the relationship between the target variable and the variable used for compilation was very strong and clear (such as the tourism industry), variations of bridge models performed well.
+
+```{r best_model_details}
+#| label: tbl-rmse-best-model
+#| tbl-cap: The specific models used for each series by the combination, and the model combination's RMSE for the specfic series. Percentage change shows the change in RMSE when compared to the benchmark model, AR1.
+
+# Creating best model df
+order <- df_y[["Meta"]] |> pull(name)
+
+best_model_table <- 
+  experiment_df |>
+  filter(h == 1 & model %in% c(best_model1, "AR1")) |>
+  group_by(model, series) |>
+  summarise(
+    rmse = sqrt(mean(error^2)),
+    .groups = "drop"
+  ) |> 
+  pivot_wider(
+    id_cols = series,
+    names_from = model,
+    values_from = rmse
+  ) |> 
+  rename(
+    best_model = all_of(best_model1)
+  ) |> 
+  mutate(
+    percentage_change = round(best_model/AR1 * 100 - 100, digits = 2)
+  ) |> 
+  select(series, best_model, percentage_change) |> 
+  arrange(match(series, order))
+
+# Attaching model details to best model df
+combination <- word(best_model1, 1)
+
+# Reading best model parquet
+best_model_table <- 
+  read_parquet(
+    file = glue("Scripts/Best models/{combination}.parquet")
+  ) |> 
+  select(model, series) |> 
+  left_join(
+    best_model_table,
+    by = "series"
+  ) |> 
+  rename(
+    Model = model,
+    Series = series,
+    RMSE = best_model,
+    "Percentage change" = percentage_change
+  )
+
+# If bottom-up reconciliation, removing the best model selected for GDP as it is just an aggregation of bottom level series.
+if (str_detect(best_model1, "Rec_BU")) {
+  best_model_table <- 
+    best_model_table |> 
+    mutate(Model = ifelse(Series == "GDP at market price",
+                          "Bottom-up aggregation",
+                          Model))
+}
+
+# Flextable
+flextable(best_model_table) |> 
+  width(j = "Model", width = 2) |> 
+  width(j = "Series", width = 2) |> 
+  width(j = "RMSE", width = 1) |> 
+  width(j = "Percentage change", width = 1) |> 
+  bold(part = "header")
+```
+
+@fig-performance below illustrates the difference in actuals and nowcasts on a sector level for `r best_model1`. It can be seen that for headline quarterly GDP and most significant sectors, the model performs well. However, for more volatile industries such as the fisheries industry, there was still some room for improvement. This was likely due to the fact that actual data used in the compilation of some industries of QNA is not publicly available, and the models were unable to capture the dynamic using other variables that were available in our dataset. For example, @maldivesbureauofstatistics2020 specifies that the main variable used in compiling of the gross value added by the fisheries industry as fish catch, for which the publicly available data ends in December 2021.
+
+```{r performance_chart}
+#| label: fig-performance
+#| fig-width: 10
+#| fig-height: 11
+#| fig-cap: The difference in actuals and nowcasts on a sector level for the best model combination selected. The nowcasts are one step ahead forecasts, with full quarterly data available and no forecast padding of jagged edges.
+
+# Creating a chart to show prediction vs actual
+order <- df_y[["Meta"]] |> pull(name)
+
+experiment_df |> 
+  filter(model == best_model1 & h == 1 & padded == "not_padded") |> 
+  select(date, series, forecast, actual) |> 
+  rename(
+    Nowcast = forecast, 
+    Actual = actual
+  ) |> 
+  pivot_longer(
+    cols = !c(date, series), 
+    names_to = "type", 
+    values_to = "value"
+  ) |>
+  mutate(series = factor(series, levels = order),
+         value = value/1000000) |> 
+  ggplot() +
+  geom_line(aes(x = as.Date.yearqtr(date),
+                y = value,
+                color = type)) +
+  facet_wrap(series~., scales = "free_y", ncol = 2) +
+  scale_y_continuous(labels = comma) +
+  theme_clean() +
+  theme(
+    legend.title = element_blank(),
+    legend.position = "bottom",
+    legend.background = element_rect(color = NA),
+    plot.background = element_rect(color = NA),
+    axis.text = element_text(size = 12, family = "Roboto", color = text_color),
+    axis.title = element_text(size = 12, family = "Roboto", color = text_color),
+    legend.text = element_text(size = 12, family = "Roboto", color = text_color),
+    strip.text = element_text(size = 12, family = "Roboto", color = text_color),
+    axis.title.x = element_blank(),
+    axis.text.x = element_text(angle = 90)
+  ) +
+  scale_color_tableau(palette = "Tableau 10", direction = 1) +
+  labs(y = "(in millions of MVR)")
+```
+
+# Nowcast
+
+```{r nowcast}
+
+# Importing nowcast
+forecast_df <- read_parquet("Scripts/forecasts.parquet")
+
+# Nowcasted date
+nowcast_date <- 
+  forecast_df |> 
+  filter(h == 1) |> 
+  distinct(date) |> 
+  pull()
+
+# Data information
+max_y_date <- df_y[["Data"]] |> pull(date) |> max()
+
+frequency_distribution <- 
+  df_x[["Data"]] |> 
+  group_by(name) |> 
+  summarise(date = max(date), .groups = "drop") |> 
+  count(date) |> 
+  arrange(date)
+
+total_series <- 
+  frequency_distribution |> 
+  pull(n) |> 
+  sum()
+
+max_x_date <- 
+  frequency_distribution |> 
+  mutate(group = row_number(),
+         frequency_mult = n/total_series * 100) |> 
+  arrange(desc(frequency_mult)) |> 
+  slice(1) |> 
+  pull(date) |> 
+  format(format = "%B %Y")
+```
+
+@fig-nowcast below illustrates the nowcasted annual percentage growth numbers for `r nowcast_date` by the selected model, `r best_model1`. The model was trained on QNA data until `r max_y_date` and the majority of the explanatory variables were available until `r max_x_date`, with some variables lagging and others leading. All missing data and all variables for which data for the full quarter is not available, were treated as described above in preprocessing.
+
+```{r nowcast_chart}
+#| label: fig-nowcast
+#| fig-width: 10
+#| fig-height: 11
+#| fig-cap: Annual percentage growth numbers based on nowcasts produced by the selected model.
+
+order <- df_y[["Meta"]] |> pull(name)
+
+chart_df <- 
+  bind_rows(
+    df_y[["Data"]] |> 
+      select(date, name, amount) |> 
+      rename(series = name) |> 
+      mutate(type = "Actual"),
+    forecast_df |> 
+      filter(model == best_model1 & h == 1) |> 
+      rename(amount = forecast) |> 
+      mutate(type = "Nowcast") |> 
+      select(date, series, amount, type)
+  ) |> 
+  group_by(series) |> 
+  mutate(growth = amount/dplyr::lag(amount, 4) * 100 - 100,
+         series = factor(series, levels = order)) |> 
+  filter(date >= "2022 Q1") |> 
+  mutate(scale = max(growth) - min(growth)) |> 
+  ungroup() |> 
+  mutate(ypos = if_else(growth > 0, growth + scale * 0.15, growth - scale * 0.15))
+
+date_vec <- chart_df |> distinct(date) |> pull()
+date_seq <- date_vec |> as.Date.yearqtr()
+
+ggplot(chart_df) +
+  geom_col(aes(x = as.Date.yearqtr(date),
+               y = growth,
+               fill = type),
+           width = 50) +
+  geom_text(aes(x = as.Date.yearqtr(date),
+                y = ypos,
+                label = round(growth, digits = 1) |> 
+                  formatC(format = "fg")),
+            family = "Roboto",
+            size = 4,
+            color = text_color) +
+  facet_wrap(series~., scales = "free_y", ncol = 2) +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = date_seq,
+                     labels = date_vec) +
+  theme_clean() +
+  theme(
+    legend.title = element_blank(),
+    legend.position = "bottom",
+    legend.background = element_rect(color = NA),
+    plot.background = element_rect(color = NA),
+    axis.text = element_text(size = 12, family = "Roboto", color = text_color),
+    axis.title = element_text(size = 12, family = "Roboto", color = text_color),
+    legend.text = element_text(size = 12, family = "Roboto", color = text_color),
+    strip.text = element_text(size = 12, family = "Roboto", color = text_color),
+    axis.title.x = element_blank(),
+    axis.text.x = element_text(angle = 90)
+  ) +
+  scale_fill_tableau(palette = "Tableau 10", direction = 1) +
+  labs(y = "(annual percentage growth)")
+```
+
+# Conclusion
+
+In this paper, we explored the nowcasting process for the quarterly GDP using monthly data from multiple sources, both domestic and external. In this process, we used ARIMA models to deal with the jagged edges and K-Nearest Neighbours regressions for any missing data. Additionally, we used multiple univariate and multivariate methods to nowcast the individual series or industries, following which, we used forecast reconciliation methods to ensure the nowcasts adhered to the aggregation constraints.
+
+We believe that there is still room for improvement in the methodology that can and should be explored in future research. Firstly, we showed that there was a significant difference in the nowcasting performance with and without padding in @tbl-padding-difference. This difference could significantly narrow down with methods that forecast the jagged edges better.
+
+Secondly, while K-Nearest Neighbours regression is a standard method of imputation for missing data in practice, it is important to explore whether there could be other methods such as bagging that could outperform it. However, it should be noted that this may result in significant increases in computation time in a process that is already computationally heavy.
+
+Thirdly, currently the hierarchical tree that we have used for forecast reconciliation only has one level. In the future, expanding the hierarchy to include more disaggregated sectors and other levels may significantly improve the performance gain from reconciliation.
+
+Similarly, nowcasting methods could potentially serve to be part of a temporal reconciliation hierarchy that could align short-term and medium-term forecasts. This could be an important avenue to explore when considering the creation of a comprehensive forecasting system that covers nowcasts, short-term forecasts and medium-term forecasts.
+
+Moreover, nowcasting in practice would be carried out with real-time data and therefore, ideally should account for vintages of the quarterly GDP as done in @richardson2018. However, we decided against it as there are significant revisions that occur in quarterly GDP, which would make it significantly challenging for us to isolate the nowcasting errors due to the model compared to revisions in past data. This issue is illustrated in more detail in @tbl-revision-table.
+
+Finally, the paper would serve to create a framework to generate nowcasts and conduct experiments for nowcasts for specified periods. It would allow the addition of different methods of forecast padding, imputation and nowcasting fairly easily. Additionally, the framework is flexible as it could be extended to conduct experiments to assess and generate nowcasts alongside forecasts of longer horizons.
+
+In conclusion, this paper can serve to be an important building block for nowcasting and the general forecasting framework in the Maldives. Additionally, we believe that the core issues of nowcasting that we have dealt with in the paper (including but not limited to imputing missing data and padding jagged edges with forecasts), can be an important guideline or starting point for future research. We have also attempted to innovate and add novel contributions to the current global literature on nowcasting by specifying bridge equations with ARIMA errors, the gradient boosting algorithms of XGBoost and LightGBM, model stacking, and by applying reconciliation methods on sector level GDP to tie nowcasts of individual series together.
+
+{{< pagebreak >}}
+
+# References {.unnumbered}
+
+::: {#refs}
+\setlength{\parskip}{1em}
+:::
+
+{{< pagebreak >}}
+
+# Appendix {.unnumbered}
+
+```{r explanatory_variables}
+#| label: tbl-explanatory-variables
+#| tbl-cap: Full list of the explanatory variables used.
+
+# Full meta data file by MMA
+meta_data <-
+  read_csv("Scripts/meta-data.csv", show_col_types = FALSE)
+
+# Joining source from meta data file into df_x meta
+# Adding in source information for EIA and IMF, and removing non-MMA database ids
+# Making the IDs into characters and removing NAs from IDs
+# Replacing _'s with " " in the names
+predictor_variable_table <- 
+  left_join(
+    x = df_x[["Meta"]],
+    y = meta_data |> 
+      select(`Series ID`, Source),
+    by = c("id" = "Series ID")
+  ) |>
+  left_join(
+    df_x[["Data"]] |> 
+      group_by(id, name) |> 
+      slice_min(date) |> 
+      rename(f_obs = date) |> 
+      ungroup() |> 
+      select(!amount),
+    by = c("id", "name")
+  ) |> 
+  left_join(
+    df_x[["Data"]] |> 
+      filter(date <= "Dec 2023") |> 
+      group_by(id, name) |> 
+      slice_max(date) |> 
+      rename(l_obs = date) |> 
+      ungroup() |> 
+      select(!amount),
+    by = c("id", "name")
+  ) |>
+  mutate(
+    Source = ifelse(id == 10000, 
+                    "U.S. Energy Information Administration",
+                    Source),
+    Source = ifelse(id %in% c(10001:10004), 
+                    "International Monetary Fund", 
+                    Source),
+    Source = ifelse(id >= 10005,
+                    "Constructed",
+                    Source),
+    name = ifelse(id == 10001,
+                  "All commodity price index (PALLFNF)",
+                  name),
+    name = ifelse(id == 10002,
+                  "All commodities excluding gold price index (PEXGALL)",
+                  name),
+    name = ifelse(id == 10003,
+                  "Food and beverage price index (PFANDB)",
+                  name),
+    name = ifelse(id == 10004,
+                  "Industrial inputs price index (PINDU)",
+                  name),
+    id = ifelse(id >= 10000, 
+                NA, 
+                id),
+    id = as.character(id),
+    id = ifelse(is.na(id), "", id),
+    Source = ifelse(is.na(Source), "", Source),
+    name = str_replace_all(name, "_", " ") |> 
+      str_to_sentence(),
+  ) |> 
+  select(id, name, Source, f_obs, l_obs) |> 
+  rename(
+    "ID" = id,
+    "Variable" = name,
+    "First obs." = f_obs,
+    "Last obs." = l_obs
+  ) 
+
+# Rendering table
+predictor_variable_table |> 
+  flextable() |> 
+  width(j = "ID", width = 0.5) |> 
+  width(j = "Variable", width = 3) |> 
+  width(j = "Source", width = 1.5) |> 
+  width(j = "First obs.", width = 0.75) |> 
+  width(j = "Last obs.", width = 0.75) |> 
+  add_footer_lines(
+    "ID refers to the series ID in the Maldives Monetary Authority database (database.mma.gov.mv). It is  left blank if the variable is either from an external source or if it is a variable created by us."
+  ) |> 
+  bold(part = "header")
+```
+
+{{< pagebreak >}}
+
+```{r table_rmse_all_series-all-models}
+#| label: tbl-rmse-all-series-all-models
+#| tbl-cap: RMSE of all models for all series (both headline GDP and sectors) for the forecast horizon of one quarter ahead. Percentage change shows the change in RMSE when compared to the benchmark model, AR1.
+
+rmse_all |> 
+  flextable() |> 
+  width(j = "Model", width = 3) |> 
+  width(j = "RMSE", width = 1.5) |> 
+  width(j = "Percentage change", width = 1.5) |> 
+  bold(part = "header")
+```
+
+{{< pagebreak >}}
+
+```{r table_rmse_top_series-all-models}
+#| label: tbl-rmse-top-series-all-models
+#| tbl-cap: RMSE of all models for headline quarterly GDP for the forecast horizon of one quarter ahead. Percentage change shows the change in RMSE when compared to the benchmark model, AR1.
+
+rmse_top |> 
+  flextable() |> 
+  width(j = "Model", width = 3) |> 
+  width(j = "RMSE", width = 1.5) |> 
+  width(j = "Percentage change", width = 1.5) |> 
+  bold(part = "header")
+```
+
+{{< pagebreak >}}
+
+```{r table_rmse_bottom_series}
+#| label: tbl-rmse-bottom-series-all-models
+#| tbl-cap: RMSE of all models for the sectors of GDP (bottom level series) for the forecast horizon of one quarter ahead. Percentage change shows the change in RMSE when compared to the benchmark model, AR1.
+
+rmse_bottom |> 
+  flextable() |> 
+  width(j = "Model", width = 3) |> 
+  width(j = "RMSE", width = 1.5) |> 
+  width(j = "Percentage change", width = 1.5) |> 
+  bold(part = "header")
+```
+
+{{< pagebreak >}}
+
+```{=latex}
+\begin{landscape}
+```
+```{r revision_table}
+#| label: tbl-revision-table
+#| tbl-cap: Revisions in GDP, computed by comparing growth published in the first estimate and second estimate.
+
+# Importing and processing QNA vintages data
+qna_files_vec <- 
+  list.files("Scripts/QNA vintages") |> 
+  str_subset(pattern = ".xlsx$")
+
+qna_vintages_df <- 
+  read_parquet(
+    "Scripts/QNA vintages/qna_vintages.parquet"
+  )
+
+total_vintages <- 
+  qna_vintages_df |> 
+  distinct(vintage) |> 
+  nrow()
+
+if (total_vintages != length(qna_files_vec)) {
+  qna_vintages_list <- list()
+  
+  for (i in qna_files_vec) {
+    id <- str_remove_all(i, ".xlsx")
+    
+    qna_df <- 
+      read_excel(path = glue("Scripts/QNA vintages/{i}"),
+                 sheet = "Table 1")
+    
+    processed_qna_df <- 
+      qna_df |> 
+      slice(6:26) |> 
+      select(2:ncol(qna_df))
+    
+    qna_start_date <- 
+      paste(
+        qna_df |> slice(4) |> select(3) |> pull(),
+        qna_df |> slice(5) |> select(3) |> pull()
+      )
+    
+    colnames(processed_qna_df) <- 
+      c("series",
+        seq(from = as.yearqtr(qna_start_date),
+            to = (as.yearqtr(qna_start_date) + (ncol(processed_qna_df) - 2)/4),
+            by = 1/4) |> 
+          as.character()
+      )
+    
+    qna_vintages_list[[id]] <- 
+      processed_qna_df |> 
+      mutate(
+        across(
+          .cols = !series,
+          .fns = as.numeric
+        )
+      ) |> 
+      pivot_longer(
+        cols = !series,
+        names_to = "date",
+        values_to = "value"
+      ) |> 
+      mutate(
+        date = as.yearqtr(date)
+      ) |> 
+      pivot_wider(
+        id_cols = date,
+        names_from = series,
+        values_from = value
+      ) |> 
+      mutate(
+        "Construction and real estate" = 
+          Construction + 
+          `Real Estate`,
+        "Public administration, health and education" = 
+          `Public administration` + 
+          Education + 
+          `Human health and social work activities`,
+        "Miscellaneous" =
+          Agriculture +
+          Manufacturing +
+          `Electricity and water` +
+          `Professional, scientific and technical activities` +
+          `Entertainment, recreation & Other services`
+      ) |> 
+      select(
+        "date", "GDP at Market price", "Taxes less subsidies",
+        "Fisheries", "Wholesale and retail trade", "Tourism",
+        "Financial services", "Transportation and communication",
+        "Construction and real estate",
+        "Public administration, health and education",
+        "Miscellaneous"
+      ) |> 
+      pivot_longer(
+        cols = !date,
+        names_to = "series",
+        values_to = "value"
+      ) |> 
+      mutate(vintage = as.yearqtr(id))
+  }
+  
+  qna_vintages_df <- 
+    bind_rows(qna_vintages_list) |> 
+    group_by(series, vintage) |> 
+    mutate(growth = value / dplyr::lag(value, 4) * 100 - 100) |> 
+    ungroup() |> 
+    filter(!is.na(growth)) |> 
+    select(!value)
+  
+  write_parquet(
+    qna_vintages_df, 
+    sink = "Scripts/QNA vintages/qna_vintages.parquet"
+  )
+}
+
+# Checking revisions
+vintages <- 
+  qna_vintages_df |> 
+  distinct(vintage) |> 
+  slice(-1) |> 
+  pull() |> 
+  as.character()
+
+vintage_differences_list <- list()
+
+for (v in vintages) {
+  previous_v <- as.character(as.yearqtr(v) - 1/4)
+  
+  difference_df <- 
+    qna_vintages_df |> 
+    filter(vintage %in% c(v, previous_v)) |> 
+    pivot_wider(
+      id_cols = c(date, series),
+      names_from = vintage,
+      values_from = growth
+    )
+  
+  colnames(difference_df) <- c("date", "series", "prev_v", "v")
+  
+  vintage_differences_list[[v]] <- 
+    difference_df |> 
+    mutate(
+        difference = v - prev_v
+    ) |> 
+    select(date, series, difference) |> 
+    mutate(vintage = v) |> 
+    filter(date >= previous_v & date < v)
+}
+
+# Highlight function
+highlight_fun <- function(x) {
+  out <- rep("transparent", length(x))
+  out[abs(x) >= 5] <- "#ffe3e0"
+  out[abs(x) >= 10] <- "#f7a399"
+  out[abs(x) >= 15] <- "#ef6351"
+  out
+}
+
+# Generating latex table
+bind_rows(vintage_differences_list) |>
+  mutate(difference = round(difference, digits = 1)) |>
+  pivot_wider(
+    id_cols = date,
+    names_from = series,
+    values_from = difference
+  ) |>
+  rename(
+    "Date" = "date",
+    "GDP" = "GDP at Market price",
+    "Trade" = "Wholesale and retail trade",
+    "Transp. & comm." = "Transportation and communication",
+    "Cons. & real est." = "Construction and real estate",
+    "Pub., hlth. & educ." = "Public administration, health and education",
+    "Misc." = "Miscellaneous"
+  ) |>
+  flextable() |>
+  # width(j = "Date", width = 0.75) |>
+  # width(j = "GDP", width = 0.75) |>
+  # width(j = "Taxes less subsidies", width = 0.75) |>
+  # width(j = "Fisheries", width = 0.75) |>
+  # width(j = "Trade", width = 0.75) |>
+  # width(j = "Tourism", width = 0.75) |>
+  # width(j = "Financial services", width = 0.75) |>
+  # width(j = "Transp. & comm.", width = 0.75) |>
+  # width(j = "Cons. & real est.", width = 0.75) |>
+  # width(j = "Pub., hlth. & educ.", width = 0.75) |>
+  # width(j = "Misc.", width = 0.75) |>
+  highlight(
+    j = ~ GDP + 
+      `Taxes less subsidies` + 
+      Fisheries + 
+      Trade + 
+      Tourism + 
+      `Financial services` + 
+      `Transp. & comm.` + 
+      `Cons. & real est.` + 
+      `Pub., hlth. & educ.` + 
+      Misc.,
+    color = highlight_fun) |>
+  add_footer_lines(
+    "Revisions generally follow for longer periods, but for ease of tabulation and as nowcasting is related to near-term estimates, only the first and second estimates are compared."
+  ) |>
+  add_footer_lines(
+    "Highlighted based on absolute difference in growth—5 percentage points, 10 percentage points, 15 percentage points or more."
+  ) |> 
+  add_footer_lines(
+    "As GDP was rebased in 2023 Q2, the growth rate for 2023 Q1 shows the difference in the growth rates before and after rebasing."
+  ) |> 
+  bold(part = "header")
+```
+
+```{=latex}
+\end{landscape}
+```
